@@ -1,0 +1,298 @@
+# Title: Top 10 UK News Articles Analysis 
+# Author: Amy Whiffen
+# Date: May 5, 2023
+# Output: html_document
+
+
+```{r}
+# Load required libraries
+library(dplyr)
+library(tidyr)
+library(kableExtra)
+library(ggplot2)
+library(tm)
+library(stringr)
+library(vader)
+
+```
+
+# READ IN THE CSV FILE
+
+```{r}
+
+# Load the data
+combined_df <- read.csv("/Users/amywhiffen/Library/Mobile Documents/com~apple~CloudDocs/Documents/LSE/Capstone Project/Methology/ANALYSIS/news_cleaned")
+
+```
+
+# COUNT THE LENGTH AND NUMBER OF ARTCILES ABOUT WHITE PEOPLE AND NON-WHITE PEOPLE
+
+```{r}
+
+# Calculate the count of articles for each name and ethnicity
+name_counts <- combined_df %>%
+  group_by(MatchedNames, Ethnicity) %>%
+  summarise(ArticlesCount = n())
+
+# Calculate the average number of articles for each ethnicity
+average_articles <- name_counts %>%
+  group_by(Ethnicity) %>%
+  summarise('Average Number of Articles' = mean(ArticlesCount))
+
+# Calculate the average length of the articles for each ethnicity
+combined_df$ArticleLength <- nchar(combined_df$Body)
+average_length_by_ethnicity <- combined_df %>%
+  group_by(Ethnicity) %>%
+  summarise('Average Length of the Article' = mean(ArticleLength))
+
+# Merge the results into a summary dataframe
+combined_df_summary <- merge(average_articles, average_length_by_ethnicity, by = "Ethnicity")
+
+# Print the table of average articles by ethnicity
+kable(combined_df_summary, caption = "Average Number of Articles About Missing Women by Ethnicity") %>%
+  kable_classic(full_width = FALSE, html_font = "Cambria")
+
+```
+
+# CALCULATE THE RELATIVE FREQUENCY OF TARGET WORDS
+
+```{r}
+
+# Define the target words
+target_words <- c('victim', 'vulnerable', 'girl', 'innocent', 'helpless', 'mother')
+
+# Count occurrences of target words in the articles for each ethnicity
+target_word_counts <- data.frame(Ethnicity = unique(combined_df$Ethnicity))
+for (word in target_words) {
+  target_word_counts[[word]] <- 0
+}
+
+for (i in 1:nrow(combined_df)) {
+  article <- combined_df$Body[i]
+  ethnicity <- combined_df$Ethnicity[i]
+  
+  for (word in target_words) {
+    if (str_detect(article, fixed(word, ignore_case = TRUE))) {
+      target_word_counts[target_word_counts$Ethnicity == ethnicity, word] <-
+        target_word_counts[target_word_counts$Ethnicity == ethnicity, word] + 1
+    }
+  }
+}
+
+#  Calculate the total count of target words for each ethnicity
+total_count <- aggregate(. ~ Ethnicity, data = target_word_counts, FUN = sum)
+
+# Calculate the relative frequency of target words for each ethnicity
+target_word_freqs <- target_word_counts
+article_counts <- table(combined_df$Ethnicity)
+
+for (word in target_words) {
+  for (ethnicity in unique(target_word_counts$Ethnicity)) {
+    target_word_freqs[target_word_freqs$Ethnicity == ethnicity, word] <- 
+      target_word_counts[target_word_counts$Ethnicity == ethnicity, word] / article_counts[[ethnicity]]
+  }
+}
+
+
+combined_df$Target_Word_Count <- 0
+
+for (i in 1:nrow(combined_df)) {
+  tweet <- combined_df$Body[i]
+  ethnicity <- combined_df$Ethnicity[i]
+  target_word_count <- 0
+  
+  for (word in target_words) {
+    if (str_detect(tweet, fixed(word, ignore_case = TRUE))) {
+      target_word_count <- target_word_count + 1
+    }
+  }
+  
+  combined_df$Target_Word_Count[i] <- target_word_count
+}
+
+
+# Calculate the total relative frequency for White and Non-White
+total_relative_frequency_white <- sum(target_word_freqs[target_word_freqs$Ethnicity == "white", -1])
+total_relative_frequency_non_white <- sum(target_word_freqs[target_word_freqs$Ethnicity == "non-white", -1])
+
+# Print the results
+cat("Total Relative Frequency for White:", total_relative_frequency_white, "\n")
+cat("Total Relative Frequency for Non-White:", total_relative_frequency_non_white, "\n")
+
+# Print the resulting frequencies
+print(target_word_freqs)
+
+```
+
+# SENTIMENT ANALYSIS USING VADER
+
+```{r}
+# Perform sentiment analysis using Vader
+sentiment_scores <- vader_df(combined_df$Body)
+combined_df$sentiment_vader <- sentiment_scores$compound
+
+# Summarise sentiment by ethnicity
+df_sentiment <- combined_df %>%
+  group_by(Ethnicity) %>%
+  summarise(
+    sentiment_sum = sum(sentiment_vader, na.rm = TRUE),
+    count = n(),
+    `Relative Sentiment Score` = sentiment_sum / count
+  )
+
+df_sentiment <- df_sentiment %>% 
+  select(Ethnicity, `Relative Sentiment Score`) 
+
+# Print the result
+kable(df_sentiment, caption = "Relative sentiment score of tweets about missing women by ethnicity") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+# Save the updated combined_df dataframe to a CSV file
+write.csv(combined_df, "combined_df.csv", row.names = FALSE)
+```
+
+# REGRESSION MODELS ARTICLES
+
+```{r}
+
+# Read the updated combined_df dataframe
+combined_df <- read.csv("/Users/amywhiffen/Library/Mobile Documents/com~apple~CloudDocs/Documents/LSE/Capstone Project/Methology/combined_df.csv")
+
+# Add cumulative count to the data
+count <- combined_df %>%
+  group_by(MatchedNames) %>%
+  summarise(count = n())
+
+combined_counts <- combined_df %>%
+  arrange(MatchedNames) %>%
+  group_by(MatchedNames) %>%
+  summarise(count = n())
+
+AVERG_count <- combined_df %>%
+  group_by(MatchedNames) %>%
+  summarise(ArticlesCount = n())
+
+AVERG_sent <- combined_df %>%
+  group_by(MatchedNames) %>%
+  summarise(Averagesentiment = mean(sentiment_vader))
+
+AVERG_length <- combined_df %>%
+  group_by(MatchedNames, Ethnicity) %>%
+  summarise(Averagearticlelength = mean(ArticleLength))
+
+combined_df$Target_Word_Count <- 0
+
+for (i in 1:nrow(combined_df)) {
+  article <- combined_df$Body[i]
+  target_word_count <- 0
+  
+  for (word in target_words) {
+    if (str_detect(article, fixed(word, ignore_case = TRUE))) {
+      target_word_count <- target_word_count + 1
+    }
+  }
+  
+  combined_df$Target_Word_Count[i] <- target_word_count
+}
+
+
+average_target_word_count <- combined_df %>%
+  group_by(MatchedNames) %>%
+  summarize(Average_Target_Word_Count = mean(Target_Word_Count))
+
+regression_df <- data_frame(AVERG_length, AverageCount = AVERG_count$ArticlesCount, Averagesentiment = AVERG_sent$Averagesentiment, Averagetarget = average_target_word_count)
+
+average_target_word_count <- combined_df %>%
+  group_by(MatchedNames) %>%
+  summarise(Average_Target_Word_Count = mean(Target_Word_Count))
+
+# Merge the average_target_word_count dataframe with the regression_df based on the MatchedNames column
+regression_df <- left_join(regression_df, average_target_word_count, by = "MatchedNames")
+
+# Fit a Poisson regression model
+model <- glm(AverageCount ~ Averagearticlelength + Ethnicity + Averagesentiment +  Average_Target_Word_Count, data = regression_df, family = "poisson")
+
+
+# Print the summary of the model
+summary(model)
+
+# Calculate the dispersion parameter
+dispersion_param <- sum(resid(model, type = "pearson")^2) / model$df.residual
+print(dispersion_param)
+
+library(MASS)
+
+# Fit a negative binomial regression model
+model <- glm.nb(AverageCount ~ Averagearticlelength + Ethnicity + Averagesentiment + Average_Target_Word_Count, data = regression_df)
+
+# Print the summary of the model
+summary(model)
+
+# Create residual plots and Cook's distance plot
+par(mfrow = c(1, 2))
+plot(residuals(model), main = "Residuals Plot (Articles)", ylab = "Residuals")
+c_dist <- cooks.distance(model)
+plot(c_dist, main = "Cook's distance plot (Articles)", ylab = "Cook's distance")
+
+# Create partial residual plots for each predictor
+library(car)
+par(mfrow = c(2, 2))
+crPlots(model)
+
+# Calculate the VIF
+library(regclass)
+vif_values <- VIF(model)
+
+# Print the VIF values
+print(vif_values)
+
+```
+
+# CALCULATE THE BREAKDOWN OF ARTCICLES BY NEWS OUTLETS
+
+```{r}
+
+# Create a bar plot showing the number of articles in each data frame
+news_raw_rows <- nrow(news_raw)
+combined_df_rows <- nrow(combined_df)
+row_counts <- data.frame(DataFrame = c("News Raw", "News Cleaned"),
+                         Rows = c(news_raw_rows, combined_df_rows))
+ggplot(row_counts, aes(x = "", y = Rows, fill = DataFrame)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar("y", start = 0) +
+  theme_void() +
+  labs(fill = NULL) +
+  theme(legend.position = "bottom") +
+  ggtitle("Number of Articles") +
+  scale_fill_manual(values = c("cyan3", "lightblue"))
+
+# Create a pie chart showing the breakdown of articles by news outlet
+# Convert the Source column to lowercase
+combined_df$Source <- tolower(combined_df$Source)
+
+# Create a new column for the combined news outlets
+combined_df$CombinedSource <- combined_df$Source
+combined_df$CombinedSource[combined_df$Source %in% c("bbc", "bbc news")] <- "BBC"
+combined_df$CombinedSource[combined_df$Source %in% c("mail online", "daily mail online")] <- "Mail Online"
+
+source_counts <- table(combined_df$CombinedSource)
+
+pie_data <- data.frame(Source = names(source_counts), Count = source_counts)
+
+# Define 10 shades of blue
+blue_palette <- c("cyan3", "cyan4", "#0B6DAE", "#0F8ECF", "#13AFF1",
+                  "#51BAF9", "#7DC5FF", "#A8D1FF", "#D4DDFF", "lightblue")
+
+# Create the pie chart
+ggplot(pie_data, aes(x = "", y = Count, fill = Source)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar("y", start = 0) +
+  theme_void() +
+  labs(fill = NULL) +
+  theme(legend.position = "bottom") +
+  geom_text(aes(label = Count), size = 3, position = position_stack(vjust = 0.5)) +
+  scale_fill_manual(values = blue_palette) +
+  theme(legend.position = "bottom") +
+  ggtitle("Breakdown of Articles by News Outlet")
+
+```

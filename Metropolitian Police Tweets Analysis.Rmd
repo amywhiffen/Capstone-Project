@@ -1,0 +1,553 @@
+# Title: Metropolitian Police Twitter Analysis
+# Author: Amy Whiffen
+# Date: May 10, 2023
+# Output: html_document
+
+# Load necessary packages
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(ggrepel)
+library(tm)
+library(kableExtra)
+library(vader)
+```
+
+1# READ IN THE CSV FILE
+
+```{r}
+
+options(scipen=999)
+
+# Read in the CSV file 
+tweets <- read.csv("/Users/amywhiffen/Library/Mobile Documents/com~apple~CloudDocs/Documents/LSE/Capstone Project/met_missing_tweets.csv")
+
+
+```
+
+# USE NER TO EXTRACT ALL THE NAMES FOR THE MISSING WOMEN
+
+```{r}
+
+library(spacyr)
+
+spacy_initialize(save_profile = TRUE)
+
+entity_names <- spacy_extract_entity(tweets$text)
+
+entity_names
+
+
+```
+
+# COMBINE ID WITH ETHNICITY 
+
+```{r}
+
+# Create a data frame with ID and Ethnicity columns
+data <- data.frame(
+  id = c(
+    77666300557672449, 84288229993492482, 85264567940300800, 92988777471016960, 96183462146473984,
+    103122446529474560, 103492095112773634, 104173469780029440, 113215680098217985, 131699855469973504,
+    156398707540099072, 246350512272846848, 248464811116081152, 252812966909587459, 276423128995995648,
+    278087361362001921, 278705642544455680, 281146878685499393, 287635777142288387, 292335516622409729,
+    294758850886778880, 296186322568241152, 326824455705853952, 331151122175778816, 338150759046737920,
+    347758474274430976, 362203895000338432, 363422202567204864, 366517405029109760, 378525749290233856,
+    383855824353103873, 388234925784064001, 393196628511064065, 400162048409346048, 400164641063858176,
+    400651402911158272, 400651972011130880, 400984271130996736, 403128283451367424, 418388051375980544,
+    420010429117890560, 420093832890679296, 422212511497457664, 422315409652875265, 422316071363047425,
+    422483147868348416, 424701767054786561, 430918865275854848, 433380111417901058, 434065936195551232,
+    436512805282664448, 469029371224023040, 471746698554146816, 476389093547720704, 478569128358199296,
+    484438051784253441, 497727264810094593, 505971366513094656, 507333679262466049, 514051532162359297,
+    520524849278877696, 536413382539485184, 544822387334971392, 551325823714983936, 558473061314613248,
+    563810689232691202, 575761425072787457, 577594215875637248, 586531014249447424, 621311568463163392,
+    623468592319873024, 628530692218056704, 629653009916674048, 629658191865978880, 632222911865225216,
+    634816073137786880, 642417145004040192, 645085874531762176, 645375092705370112, 645822780764762112,
+    649212637079846912, 663657504203739136, 668401561719189504, 670257081514131456, 675714490286088192,
+    679689720599805952, 686561786087247872, 690383395063488512, 698434389798219776, 702453159495671808,
+    718400727056588800, 723826897713549312, 725448717122326528, 727463666308780032, 728375446631501826,
+    733922928409104384, 735402779494211584, 736967794303107072, 739884819627249664, 754715678070935553,
+    757608624701210624, 758636028878057472, 764114057381240832, 764606846879600640, 768740455710334976,
+    775117628067160065, 776898183955881984, 790544429748785152, 799587564122292225, 801465963086512128,
+    805786055802834944, 806170971371700224, 812394541043056640, 829810864278667266, 832302278543626248,
+    833848353309982720, 834414900432744448, 834678578633662464, 842264909303959552, 872454929096613888,
+    893574349827059712, 894913109781086212, 896112303396933632, 898907099777970176, 901842472023855106,
+    910793880873979904, 913042070113341440, 926818733464498181, 927971614305681409, 928097908783755266,
+    928371586016538624, 930122300325851137, 930991637798453248, 931482751538221056, 932634757879533569,
+    944209124488876032, 947169185829982208, 953287615737982976, 955542975710298113, 956562044458815489,
+    961428018286776321, 964459410956455936, 978644046649360384, 984132561193627653, 1012310565417570304,
+    1017701193487978496, 1018578760432607232, 1034799522231267330, 1037781022954467329, 1050748884916625408,
+    1052947871987888128, 1054716911894835201, 1058733298879512577, 1060906409225805827, 1066426384543830017,
+    1067065868717305856, 1088839555158102016, 1111244269283692544, 1117867536060542977, 1146422152071192576,
+    1147633715671195653, 1162385702052683776, 1166112609004924928, 1186927477513424896, 1203703944201035776,
+    1207257218669858819, 1214273263708385280, 131699855469973504, 1353001291593752577, 1370080230862381061,
+    156398707540099072, 1602279060268269568, 246350512272846848, 248464811116081152, 252812966909587456,
+    257521205131763712, 342515214203375617, 362153606981492736, 363214731156258818, 423664774359289856,
+    453292282289344512, 485279109027610625, 508698762362245120, 532668652727050240, 573556361721741313,
+    587379847191781376, 592545627428487168, 636196032506949633, 669266824710737921, 865233901224153089,
+    942176671611973633, 1060019500056281088, 1072427328893005824, 1091425867480383489
+  ),
+  Ethnicity = rep("NA", 194) # Initialize Ethnicity column with "NA"
+)
+
+# Update the Ethnicity column based on ID values
+data$Ethnicity[data$id == 77666300557672449] <- "non-white"
+data$Ethnicity[data$id == 84288229993492482] <- "N/A"
+data$Ethnicity[data$id == 85264567940300800] <- "N/A"
+data$Ethnicity[data$id == 92988777471016960] <- "N/A"
+data$Ethnicity[data$id == 96183462146473984] <- "N/A"
+data$Ethnicity[data$id == 103122446529474560] <- "N/A"
+data$Ethnicity[data$id == 103492095112773634] <- "N/A"
+data$Ethnicity[data$id == 104173469780029440] <- "non-white"
+data$Ethnicity[data$id == 113215680098217985] <- "N/A"
+data$Ethnicity[data$id == 131699855469973504] <- "white"
+data$Ethnicity[data$id == 156398707540099072] <- "white"
+data$Ethnicity[data$id == 246350512272846848] <- "white"
+data$Ethnicity[data$id == 248464811116081152] <- "non-white"
+data$Ethnicity[data$id == 252812966909587459] <- "white"
+data$Ethnicity[data$id == 276423128995995648] <- "non-white"
+data$Ethnicity[data$id == 278087361362001921] <- "N/A"
+data$Ethnicity[data$id == 278705642544455680] <- "N/A"
+data$Ethnicity[data$id == 281146878685499393] <- "non-white"
+data$Ethnicity[data$id == 287635777142288387] <- "non-white"
+data$Ethnicity[data$id == 292335516622409729] <- "white"
+data$Ethnicity[data$id == 294758850886778880] <- "white"
+data$Ethnicity[data$id == 296186322568241152] <- "non-white"
+data$Ethnicity[data$id == 326824455705853952] <- "N/A"
+data$Ethnicity[data$id == 331151122175778816] <- "non-white"
+data$Ethnicity[data$id == 338150759046737920] <- "white"
+data$Ethnicity[data$id == 347758474274430976] <- "white"
+data$Ethnicity[data$id == 362203895000338432] <- "white"
+data$Ethnicity[data$id == 363422202567204864] <- "non-white"
+data$Ethnicity[data$id == 366517405029109760] <- "white"
+data$Ethnicity[data$id == 378525749290233856] <- "white"
+data$Ethnicity[data$id == 383855824353103873] <- "white"
+data$Ethnicity[data$id == 388234925784064001] <- "white"
+data$Ethnicity[data$id == 393196628511064065] <- "non-white"
+data$Ethnicity[data$id == 400162048409346048] <- "white"
+data$Ethnicity[data$id == 400164641063858176] <- "white"
+data$Ethnicity[data$id == 400651402911158272] <- "white"
+data$Ethnicity[data$id == 400651972011130880] <- "white"
+data$Ethnicity[data$id == 400984271130996736] <- "white"
+data$Ethnicity[data$id == 403128283451367424] <- "white"
+data$Ethnicity[data$id == 418388051375980544] <- "non-white"
+data$Ethnicity[data$id == 420010429117890560] <- "white"
+data$Ethnicity[data$id == 420093832890679296] <- "white"
+data$Ethnicity[data$id == 422212511497457664] <- "white"
+data$Ethnicity[data$id == 422315409652875265] <- "white"
+data$Ethnicity[data$id == 422316071363047425] <- "white"
+data$Ethnicity[data$id == 422483147868348416] <- "white"
+data$Ethnicity[data$id == 424701767054786561] <- "white"
+data$Ethnicity[data$id == 430918865275854848] <- "white"
+data$Ethnicity[data$id == 433380111417901058] <- "white"
+data$Ethnicity[data$id == 434065936195551232] <- "white"
+data$Ethnicity[data$id == 436512805282664448] <- "non-white"
+data$Ethnicity[data$id == 469029371224023040] <- "white"
+data$Ethnicity[data$id == 471746698554146816] <- "white"
+data$Ethnicity[data$id == 476389093547720704] <- "white"
+data$Ethnicity[data$id == 478569128358199296] <- "white"
+data$Ethnicity[data$id == 484438051784253441] <- "white"
+data$Ethnicity[data$id == 497727264810094593] <- "white"
+data$Ethnicity[data$id == 505971366513094656] <- "white"
+data$Ethnicity[data$id == 507333679262466049] <- "white"
+data$Ethnicity[data$id == 514051532162359297] <- "non-white"
+data$Ethnicity[data$id == 520524849278877696] <- "white"
+data$Ethnicity[data$id == 536413382539485184] <- "white"
+data$Ethnicity[data$id == 544822387334971392] <- "non-white"
+data$Ethnicity[data$id == 551325823714983936] <- "white"
+data$Ethnicity[data$id == 558473061314613248] <- "non-white"
+data$Ethnicity[data$id == 563810689232691202] <- "non-white"
+data$Ethnicity[data$id == 575761425072787457] <- "white"
+data$Ethnicity[data$id == 577594215875637248] <- "white"
+data$Ethnicity[data$id == 586531014249447424] <- "non-white"
+data$Ethnicity[data$id == 621311568463163392] <- "white"
+data$Ethnicity[data$id == 623468592319873024] <- "non-white"
+data$Ethnicity[data$id == 628530692218056704] <- "white"
+data$Ethnicity[data$id == 629653009916674048] <- "white"
+data$Ethnicity[data$id == 629658191865978880] <- "white"
+data$Ethnicity[data$id == 632222911865225216] <- "white"
+data$Ethnicity[data$id == 634816073137786880] <- "non-white"
+data$Ethnicity[data$id == 642417145004040192] <- "white"
+data$Ethnicity[data$id == 645085874531762176] <- "white"
+data$Ethnicity[data$id == 645375092705370112] <- "white"
+data$Ethnicity[data$id == 645822780764762112] <- "white"
+data$Ethnicity[data$id == 649212637079846912] <- "non-white"
+data$Ethnicity[data$id == 663657504203739136] <- "white"
+data$Ethnicity[data$id == 668401561719189504] <- "non-white"
+data$Ethnicity[data$id == 670257081514131456] <- "white"
+data$Ethnicity[data$id == 675714490286088192] <- "white"
+data$Ethnicity[data$id == 679689720599805952] <- "white"
+data$Ethnicity[data$id == 686561786087247872] <- "non-white"
+data$Ethnicity[data$id == 690383395063488512] <- "white"
+data$Ethnicity[data$id == 698434389798219776] <- "white"
+data$Ethnicity[data$id == 702453159495671808] <- "white"
+data$Ethnicity[data$id == 718400727056588800] <- "white"
+data$Ethnicity[data$id == 723826897713549312] <- "non-white"
+data$Ethnicity[data$id == 725448717122326528] <- "white"
+data$Ethnicity[data$id == 727463666308780032] <- "non-white"
+data$Ethnicity[data$id == 728375446631501826] <- "white"
+data$Ethnicity[data$id == 733922928409104384] <- "white"
+data$Ethnicity[data$id == 735402779494211584] <- "non-white"
+data$Ethnicity[data$id == 736967794303107072] <- "white"
+data$Ethnicity[data$id == 739884819627249664] <- "non-white"
+data$Ethnicity[data$id == 754715678070935553] <- "white"
+data$Ethnicity[data$id == 757608624701210624] <- "white"
+data$Ethnicity[data$id == 758636028878057472] <- "non-white"
+data$Ethnicity[data$id == 764114057381240832] <- "non-white"
+data$Ethnicity[data$id == 764606846879600640] <- "white"
+data$Ethnicity[data$id == 768740455710334976] <- "non-white"
+data$Ethnicity[data$id == 775117628067160065] <- "white"
+data$Ethnicity[data$id == 776898183955881984] <- "white"
+data$Ethnicity[data$id == 790544429748785152] <- "white"
+data$Ethnicity[data$id == 799587564122292225] <- "non-white"
+data$Ethnicity[data$id == 801465963086512128] <- "white"
+data$Ethnicity[data$id == 805786055802834944] <- "white"
+data$Ethnicity[data$id == 806170971371700224] <- "non-white"
+data$Ethnicity[data$id == 812394541043056640] <- "white"
+data$Ethnicity[data$id == 829810864278667266] <- "white"
+data$Ethnicity[data$id == 832302278543626248] <- "non-white"
+data$Ethnicity[data$id == 833848353309982720] <- "white"
+data$Ethnicity[data$id == 834414900432744448] <- "non-white"
+data$Ethnicity[data$id == 834678578633662464] <- "white"
+data$Ethnicity[data$id == 842264909303959552] <- "white"
+data$Ethnicity[data$id == 872454929096613888] <- "white"
+data$Ethnicity[data$id == 893574349827059712] <- "white"
+data$Ethnicity[data$id == 894913109781086212] <- "white"
+data$Ethnicity[data$id == 896112303396933632] <- "white"
+data$Ethnicity[data$id == 898907099777970176] <- "non-white"
+data$Ethnicity[data$id == 901842472023855106] <- "white"
+data$Ethnicity[data$id == 910793880873979904] <- "white"
+data$Ethnicity[data$id == 913042070113341440] <- "non-white"
+data$Ethnicity[data$id == 926818733464498181] <- "white"
+data$Ethnicity[data$id == 927971614305681409] <- "white"
+data$Ethnicity[data$id == 928097908783755266] <- "non-white"
+data$Ethnicity[data$id == 928371586016538624] <- "non-white"
+data$Ethnicity[data$id == 930122300325851137] <- "white"
+data$Ethnicity[data$id == 930991637798453248] <- "white"
+data$Ethnicity[data$id == 931482751538221056] <- "non-white"
+data$Ethnicity[data$id == 932634757879533569] <- "white"
+data$Ethnicity[data$id == 944209124488876032] <- "white"
+data$Ethnicity[data$id == 947169185829982208] <- "white"
+data$Ethnicity[data$id == 953287615737982976] <- "white"
+data$Ethnicity[data$id == 955542975710298113] <- "non-white"
+data$Ethnicity[data$id == 956562044458815489] <- "non-white"
+data$Ethnicity[data$id == 961428018286776321] <- "white"
+data$Ethnicity[data$id == 964459410956455936] <- "white"
+data$Ethnicity[data$id == 978644046649360384] <- "white"
+data$Ethnicity[data$id == 984132561193627653] <- "white"
+data$Ethnicity[data$id == 1012310565417570304] <- "non-white"
+data$Ethnicity[data$id == 1017701193487978496] <- "white"
+data$Ethnicity[data$id == 1018578760432607232] <- "white"
+data$Ethnicity[data$id == 1034799522231267330] <- "white"
+data$Ethnicity[data$id == 1037781022954467329] <- "white"
+data$Ethnicity[data$id == 1050748884916625408] <- "white"
+data$Ethnicity[data$id == 1052947871987888128] <- "white"
+data$Ethnicity[data$id == 1054716911894835201] <- "white"
+data$Ethnicity[data$id == 1058733298879512577] <- "white"
+data$Ethnicity[data$id == 1060906409225805827] <- "white"
+data$Ethnicity[data$id == 1066426384543830017] <- "white"
+data$Ethnicity[data$id == 1067065868717305856] <- "white"
+data$Ethnicity[data$id == 1088839555158102016] <- "non-white"
+data$Ethnicity[data$id == 1111244269283692544] <- "white"
+data$Ethnicity[data$id == 1117867536060542977] <- "white"
+data$Ethnicity[data$id == 1146422152071192576] <- "white"
+data$Ethnicity[data$id == 1147633715671195653] <- "white"
+data$Ethnicity[data$id == 1162385702052683776] <- "non-white"
+data$Ethnicity[data$id == 1166112609004924928] <- "white"
+data$Ethnicity[data$id == 1186927477513424896] <- "white"
+data$Ethnicity[data$id == 1203703944201035776] <- "non-white"
+data$Ethnicity[data$id == 1207257218669858819] <- "white"
+data$Ethnicity[data$id == 1214273263708385280] <- "non-white"
+data$Ethnicity[data$id == 1353001291593752577] <- "white"
+data$Ethnicity[data$id == 1370080230862381061] <- "white"
+data$Ethnicity[data$id == 1602279060268269568] <- "white"
+data$Ethnicity[data$id == 257521205131763712] <- "white"
+data$Ethnicity[data$id == 342515214203375617] <- "white"
+data$Ethnicity[data$id == 362153606981492736] <- "white"
+data$Ethnicity[data$id == 363214731156258818] <- "white"
+data$Ethnicity[data$id == 423664774359289856] <- "white"
+data$Ethnicity[data$id == 453292282289344512] <- "white"
+data$Ethnicity[data$id == 485279109027610625] <- "white"
+data$Ethnicity[data$id == 508698762362245120] <- "white"
+data$Ethnicity[data$id == 532668652727050240] <- "non-white"
+data$Ethnicity[data$id == 573556361721741313] <- "white"
+data$Ethnicity[data$id == 587379847191781376] <- "white"
+data$Ethnicity[data$id == 592545627428487168] <- "white"
+data$Ethnicity[data$id == 636196032506949633] <- "white"
+data$Ethnicity[data$id == 669266824710737921] <- "white"
+data$Ethnicity[data$id == 865233901224153089] <- "white"
+data$Ethnicity[data$id == 942176671611973633] <- "white"
+data$Ethnicity[data$id == 1060019500056281088] <- "white"
+data$Ethnicity[data$id == 1072427328893005824] <- "white"
+data$Ethnicity[data$id == 1091425867480383489] <- "white"
+
+# Merging data frames
+df <- merge(tweets, data, by = "id", all.x = T)
+
+# Remove duplicate rows
+df <- df %>%
+  distinct()
+
+
+```
+
+# ADD NAMES TO THE CORRECT TWEET
+
+```{r}
+# 
+# Create a vector of names
+names <- c("Kerry Lea Hamilton", "Amna Ali", "Amber Stabana", "Harina Payagla",
+           "Maureen Muthoka", "Jessica Shariff", "Hazer Rahman", "Shecaira Morris",
+           "Juliette Weir", "Areerut Sudha", "Janelle Duncan-Bailey", "Juliet Gilson",
+           "Shakeela Adeboye", "Tasmin Savoury", "Lidia Efrem", "Melissa Attard",
+           "Nesrine Kaizra", "Dominique Washington", "Paige Smith", "Jodie Oliver-Kerr",
+           "Karolina Wrezel", "Gelesa Nembhard", "Ella Hysom", "Jolanta Wiktoria Andrzejewska",
+           "Yasmin Idris", "Sherley Archer", "Wiktoria Popiel", "Vitalija Sidlauskaite",
+           "Josie Delaney", "Sadie Peragine", "Paige Birch", "Elisha Cade", "Melissa Nicholls",
+           "Aiesha Sharif", "Mia Ferguson", "Jade Young", "Jaydine Brealey", "Silvia Silva",
+           "Rhiain Clarke", "Sayeeda Chowdhury", "Isabel O'Callaghan", "Isha Dunbuya",
+           "Jessica Lewis", "Samantha Hopkins", "Michaela Cordice", "Amelia Adams",
+           "Zahida Ali", "Sophia Dietrich", "Eleanor Fullan-Smyth", "Alison Mora",
+           "Tatum Defreitas", "Chrissie Haze", "Fathiya Geilani", "Sophie McGonagle",
+           "Karina Lukova", "Natalie Taylor", "Serif Ibrahim", "Tyrenne Mason-Hawkins",
+           "Memori Ahmun", "Reneisha Brown", "Elesha Richardson", "Iwona Kaminska",
+           "Niamh McGovern", "Ayan Omar", "Olivia John", "Layla Cheeseman", "Georgia Chandler",
+           "Elena Veronica Ciochina", "Yasmin Ashkir", "Sandra Herring", "Mirza Fawzia",
+           "Jade Cleveland", "Tia Harrold", "Paris Morgans-Turrell", "Olivia Burton-Taylor",
+           "Ahlam Abdullah", "Jemma Jones", "Anna Skinner", "Abigail Farrell", "Morgan Williams",
+           "Manisha Banga", "Ayesha mercy Alohan-Eke", "Nerys Garrett", "Katherine Mateus",
+           "Lauren Doyle", "Tamara Richardson-Headlam", "Rachel Brown", "Nuria Tituana",
+           "Sriyani Knowles", "Magda Hussein", "Charlene Williams", "Matilda Mitchison",
+           "Megan Wintle", "Alexandra Zurawaska", "Lisa Valencia", "Suzanna Kransniqi",
+           "Chelsea Binfield", "Melissa Dalton", "Iyesha Lynch", "Beyoncé Turay",
+           "Salma Mohamed", "India Saxty", "Lisa Eastwood", "Phoebe Taylor", "Chantal Chizzoni",
+           "Maisy Dowell", "Khadija Mohammed", "Megan Heynen", "Nadia Zorkot",
+           "Tye-Charlene Ornoy-McNally", "Amy Taylor", "Amber Harris", "Danni Leigh Lacey",
+           "Suemaya Begum", "Shannin Huggins", "Alicia Sesay", "Emma Tagliabue", "Amina Abdulqadir",
+           "Natalia Zdgodka", "Sarah Everard", "Sabina Nessa", "Sian Blake", "Suma Begum",
+           "Owami Davies", "Joy Morgan", "Blessing Olusegun", "Nicole Smallman", "Bibaa Henry")
+
+# Create a function that matches the names in the text and returns them separated by commas
+match_names <- function(text, names) {
+  matched_names <- names[str_detect(text, fixed(names, ignore_case = TRUE))]
+  if (length(matched_names) > 0) {
+    return(str_c(matched_names, collapse = ", "))
+  } else {
+    return(NA)
+  }
+}
+
+# Apply the function to create a new column 'MatchedNames'
+ df$MatchedNames <- sapply(df$text, match_names, names)
+
+```
+
+
+# CREATE A TABLE SHOWING THE MEANS OF PUBLIC METRICS SPLIT BY ETHNICITY
+
+```{r}
+
+# Remove rows with 'N/A' values in 'Ethnicity' column
+df <- na.omit(df)
+
+# Length of each tweet
+df$text_length <- nchar(df$text)
+
+# Calculate means
+mean_data <- df %>%
+  group_by(Ethnicity) %>%
+  summarise(`Mean likes` = mean(public_metrics.like_count, na.rm = TRUE),
+            `Mean number of retweets` = mean(public_metrics.retweet_count, na.rm = TRUE),
+            `Mean number of replies` = mean(public_metrics.reply_count, na.rm = TRUE),
+            `Mean length of tweet` = mean(text_length, na.rm = TRUE)) 
+
+# Create a nice-looking table using kable and kableExtra
+kable(mean_data, caption = "Means of Public Metrics by Ethnicity") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+
+```
+
+# COUNT THE NUMBER OF TWEETS ABOUT WHITE PEOPLE AND NON-WHITE PEOPLE
+
+```{r}
+# Count the number of tweets about White people
+white_tweet_count <- sum(!is.na(df$Ethnicity) & df$Ethnicity == "white")
+
+# Count the number of tweets about Non-white people
+non_white_tweet_count <- sum(!is.na(df$Ethnicity) & df$Ethnicity != "white")
+
+# Create a data frame with the counts
+counts_df <- data.frame(Description = c("Number of Tweets about missing white women", "Number of Tweets about missing non-white women"),
+                        Count = c(white_tweet_count, non_white_tweet_count))
+
+kable(counts_df, caption = "Missing Women: Tweet Counts by Ethnicity") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+```
+
+# CALCULATE THE RELATIVE FREQUENCY OF TARGET WORDS
+
+```{r}
+
+library(tidytext)
+detach(package:MASS)
+library(dplyr)
+library(stringr)
+
+# Define the target words
+target_words <- c('victim', 'vulnerable', 'girl', 'innocent', 'helpless', 'mother')
+
+# Split tweet texts into individual words
+df_words <- df %>%
+  select(Ethnicity, text) %>%
+  unnest_tokens(word, text) %>%
+  filter(word %in% target_words) 
+
+# Perform frequency analysis
+word_counts <- df_words %>%
+  group_by(Ethnicity) %>%
+  count(word, sort = TRUE)
+
+# Calculate the target word count for each tweet by ethnicity
+target_word_counts <- df %>%
+  group_by(Ethnicity, text) %>%
+  summarise(target_word_count = sum(str_count(tolower(text), pattern = paste(target_words, collapse = "|"))))
+
+# Count the number of target words in each tweet
+df$average_target_word_count <- sapply(df$text, function(tweet) {
+  sum(str_count(tolower(tweet), pattern = paste(target_words, collapse = "|")))
+})
+
+# Create a data frame with the total count of tweets for each ethnicity
+tweet_counts <- df %>%
+  group_by(Ethnicity) %>%
+  summarise(total_tweets = n())
+
+# Join the word counts with the tweet counts
+word_counts <- left_join(word_counts, tweet_counts, by = "Ethnicity")
+
+# Calculate the relative frequency
+word_counts <- word_counts %>%
+  mutate(relative_frequency = n / total_tweets)
+
+# Calculate the total relative frequency for White and Non-White
+total_relative_frequency_white <- sum(word_counts$relative_frequency[word_counts$Ethnicity == "white"])
+total_relative_frequency_non_white <- sum(word_counts$relative_frequency[word_counts$Ethnicity == "non-white"])
+
+# Print the results
+cat("Total Relative Frequency for White:", total_relative_frequency_white, "\n")
+cat("Total Relative Frequency for Non-White:", total_relative_frequency_non_white, "\n")
+
+# Print the table using kable
+kable(word_counts, caption = "Relative Frequency of Target Words in Tweets by Ethnicity") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+# Plot the relative frequency of target words for each ethnicity
+ggplot(word_counts, aes(x = word, y = relative_frequency, fill = Ethnicity)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  scale_fill_manual(values = c("non-white" = "#1177AA", "white" = "#44BBDD")) +
+  theme_minimal() +
+  labs(x = "Word", y = "Relative Frequency", 
+       fill = "Ethnicity", 
+       title = "Relative Frequency of Target Words in Tweets by Ethnicity") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```
+
+
+# SENTIMENT ANALYSIS USING VADER
+
+```{r}
+
+# Calculate sentiment using VADER
+sentiment_scores <- vader_df(df$text)
+
+# Add sentiment scores to the dataframe
+df$sentiment_vader <- sentiment_scores$compound
+
+# Summarise sentiment by ethnicity
+df_sentiment <- df %>%
+  group_by(Ethnicity) %>%
+  summarise(
+    sentiment_sum = sum(sentiment_vader, na.rm = TRUE),
+    count = n(),
+    `Relative Sentiment Score` = sentiment_sum / count
+  )
+
+# Print the result
+kable(df_sentiment, caption = "Relative Sentiment Score of Tweets about Missing Women by Ethnicity") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+```
+
+# REGRESSION MODELS TWEETS
+
+```{r}
+
+df <- df %>%
+  mutate(total_engagement = public_metrics.retweet_count + public_metrics.reply_count + public_metrics.like_count)
+
+
+df
+# Run a Poisson regression
+model_pois <- glm(total_engagement ~ text_length + Ethnicity + sentiment_vader + average_target_word_count, data = df, family = "poisson")
+
+# Summary of your model
+summary(model_pois)
+
+# Dispersion parameter
+dispersion_param <- sum(resid(model_pois, type = "pearson")^2) / model_pois$df.residual
+print(dispersion_param)
+
+# AS Residual deviance IS 3282.5  WHICH IS MUCH HIGHER THAN 164 DEGREES OF FREEDOM WE WILL ASSUME THERE IS OVER DISPERSION SO WILL USE NEGATIVE BINOMINAL 
+
+# Convert ethnicity to a factor
+df$Ethnicity <- as.factor(df$Ethnicity)
+
+library(MASS)
+# Run a negative binomial regression
+model_nb <- glm.nb(total_engagement ~ text_length + Ethnicity + sentiment_vader + average_target_word_count, data = df)
+
+summary(model_nb)
+
+# Create a 1x2 plot layout
+par(mfrow = c(1, 2))
+
+# Create residual plot
+plot(residuals(model_nb), main = "Residuals Plot (Tweets)", ylab = "Residuals")
+
+# Create Cook's distance plot
+c_dist <- cooks.distance(model_nb)
+plot(c_dist, main = "Cook's distance plot (Tweets)", ylab = "Cook's distance")
+
+# Calculate the VIF
+vif_values <- vif(model_nb)
+
+# Print the VIF values
+print(vif_values)
+
+
+
+
+```
+
+
+
+
+
+```
