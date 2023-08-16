@@ -1,0 +1,543 @@
+# Title: Prediction Model Analysis
+# Author: Amy Whiffen
+# Date: May 25, 2023
+# Output: html_document
+
+
+```{r}
+
+library(dplyr)
+library(randomForest)
+library(caret)
+library(knitr)
+
+# Select relevant columns from the dataframe
+relevant_tweets <- df %>%
+  select(MatchedNames, 
+         public_metrics.retweet_count, 
+         public_metrics.reply_count,
+         public_metrics.like_count,
+         public_metrics.quote_count,
+         public_metrics.impression_count,
+         text_length,
+         total_engagement,
+         target_word_count,
+         sentiment_vader)
+
+# Calculate the mean of relevant columns by 'MatchedNames'
+relevant_tweets_agg <- relevant_tweets %>%
+  group_by(MatchedNames) %>%
+  summarise_all(mean, na.rm = TRUE)
+
+# Join the aggregated data with the regression dataframe
+new_df <- left_join(regression_df, relevant_tweets_agg, by = "MatchedNames")
+
+# Replace NA values with 0 in all columns
+new_df[] <- lapply(new_df, function(x) ifelse(is.na(x), 0, x))
+
+
+
+```
+
+
+```{r}
+
+# Split the data into training and testing sets for tweets
+set.seed(123) # For reproducibility
+
+# Preprocess the data
+# Select only relevant features
+predictors_tweets <- c("text_length", "sentiment_vader", "total_engagement", "target_word_count")
+new_df_tweets <- df[c("Ethnicity", predictors_tweets)]
+
+set.seed(123) # for reproducibility
+trainIndex <- createDataPartition(new_df_tweets$Ethnicity, p = .8, list = FALSE, times = 1)
+train_set <- new_df_tweets[trainIndex, ]
+test_set  <- new_df_tweets[-trainIndex, ]
+
+# Convert Ethnicity back to factor
+train_set$Ethnicity <- as.factor(train_set$Ethnicity)
+test_set$Ethnicity <- as.factor(test_set$Ethnicity)
+
+# Train the model
+set.seed(123)
+model_tweets <- randomForest(Ethnicity ~ ., data = train_set, ntree = 100)
+
+# Predict using the model for the tweets dataset
+predictions_tweets <- predict(model_tweets, newdata = test_set)
+
+# Create a data frame to store the results
+results_tweets <- data.frame(
+  Predicted_Ethnicity = predictions_tweets,
+  Actual_Ethnicity = test_set$Ethnicity
+)
+
+# Create a confusion matrix
+confusion_matrix_tweets <- table(results_tweets$Predicted_Ethnicity, results_tweets$Actual_Ethnicity)
+
+# Calculate evaluation metrics
+accuracy_tweets <- round(sum(diag(confusion_matrix_tweets)) / sum(confusion_matrix_tweets), 2)
+precision_tweets <- round(diag(confusion_matrix_tweets) / colSums(confusion_matrix_tweets), 2)
+recall_tweets <- round(diag(confusion_matrix_tweets) / rowSums(confusion_matrix_tweets), 2)
+f1_score_tweets <- round(2 * (precision_tweets * recall_tweets) / (precision_tweets + recall_tweets), 2)
+
+# Create a table using kable()
+table_tweets <- data.frame(
+  Ethnicity = rownames(confusion_matrix_tweets),
+  non_white = confusion_matrix_tweets[, "non-white"],
+  white = confusion_matrix_tweets[, "white"],
+  Precision = precision_tweets,
+  Recall = recall_tweets,
+  F1_Score = f1_score_tweets
+)
+
+# Format the table
+kable(table_tweets, align = "c", caption = "Evaluation Metrics for Ethnicity Prediction (Tweets Dataset)") %>%
+    kable_classic(full_width = F, html_font = "Cambria")
+
+# Feature Importance Analysis
+importance_tweets <- importance(model_tweets)
+
+# Create a data frame for feature importance
+importance_df_tweets <- data.frame(Attribute = rownames(importance_tweets),
+                                   MeanDecreaseGini = importance_tweets[, "MeanDecreaseGini"])
+
+# Print the table using kable
+kable(importance_df_tweets, align = "c", caption = "Feature Importance Analysis (Tweets Dataset)") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+```
+
+```{r}
+library(randomForest)
+library(caret)
+library(knitr)
+
+# Ensure the target variable is a factor
+new_df_tweets$Ethnicity <- factor(new_df_tweets$Ethnicity)
+
+# Convert the factor levels to valid R variable names
+levels(new_df_tweets$Ethnicity) <- make.names(levels(new_df_tweets$Ethnicity))
+
+# Specify the control parameters for cross-validation
+control <- trainControl(method = "cv",        # stratified k-fold cross-validation
+                        number = 10,          # number of folds (k)
+                        classProbs = TRUE,    # class probabilities should be computed
+                        summaryFunction = multiClassSummary, # Use a summary function suitable for multiclass classification
+                        savePredictions = "final") # Save predictions for later analysis
+
+# Set seed for reproducibility
+set.seed(123)
+
+# Train the model using cross-validation
+model_tweets <- train(Ethnicity ~ .,
+                      data = new_df_tweets,  # The dataset
+                      method = "rf",         # Random Forest algorithm
+                      trControl = control,   # The cross-validation control parameters specified earlier
+                      metric = "Accuracy",   # The performance metric to optimize
+                      ntree = 100)           # number of trees
+
+# Extract results from the model
+results_tweets <- model_tweets$results
+
+# Extract the F1 scores for each fold
+f1_scores <- model_tweets$resample$F1
+
+# Calculate the average F1 score
+average_f1_tweets <- round(mean(f1_scores, na.rm = TRUE), 2)
+
+# Output the results
+cat("Average F1 Score (Tweets Dataset):", average_f1_tweets, "\n")
+
+
+
+```
+
+# ARTCILES BEFORE SMOTE
+
+```{r}
+
+
+# Split the data into training and testing sets for articles
+set.seed(123)
+predictors_articles <- c("ArticleLength", "sentiment_vader", "total_count")
+new_df_articles <- combined_df[c("Ethnicity", predictors_articles )]
+
+trainIndex <- createDataPartition(new_df_articles$Ethnicity, p = .8, list = FALSE, times = 1)
+train_set <- new_df_articles[trainIndex, ]
+test_set  <- new_df_articles[-trainIndex, ]
+
+train_set$Ethnicity <- as.factor(train_set$Ethnicity)
+test_set$Ethnicity <- as.factor(test_set$Ethnicity)
+
+set.seed(123)
+model_articles <- randomForest(Ethnicity ~ ., data = train_set, ntree = 100)
+
+# Predict using the model for the articles dataset
+predictions_articles <- predict(model_articles, newdata = test_set)
+
+# Create a data frame to store the results and calculate evaluation metrics
+results_articles <- data.frame(
+  Predicted_Ethnicity = predictions_articles,
+  Actual_Ethnicity = test_set$Ethnicity
+)
+
+confusion_matrix_articles <- table(results_articles$Predicted_Ethnicity, results_articles$Actual_Ethnicity)
+accuracy_articles <- round(sum(diag(confusion_matrix_articles)) / sum(confusion_matrix_articles), 2)
+precision_articles <- round(diag(confusion_matrix_articles) / colSums(confusion_matrix_articles), 2)
+recall_articles <- round(diag(confusion_matrix_articles) / rowSums(confusion_matrix_articles), 2)
+f1_score_articles <- round(2 * (precision_articles * recall_articles) / (precision_articles + recall_articles), 2)
+
+# Perform feature importance analysis for articles
+importance_articles <- importance(model_articles)
+importance_df_articles <- data.frame(Attribute = rownames(importance_articles),
+                                     MeanDecreaseGini = importance_articles[, "MeanDecreaseGini"])
+
+# Print evaluation metrics for tweets dataset
+kable(
+  data.frame(
+    Ethnicity = rownames(confusion_matrix_tweets),
+    non_white = confusion_matrix_tweets[, "non-white"],
+    white = confusion_matrix_tweets[, "white"],
+    Precision = precision_tweets,
+    Recall = recall_tweets,
+    F1_Score = f1_score_tweets
+  ),
+  align = "c",
+  caption = "Evaluation Metrics for Ethnicity Prediction (Tweets Dataset)"
+) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+# Print feature importance analysis for tweets dataset
+kable(
+  importance_df_tweets,
+  align = "c",
+  caption = "Feature Importance Analysis (Tweets Dataset)"
+) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+# Print evaluation metrics for articles dataset
+kable(
+  data.frame(
+    Ethnicity = rownames(confusion_matrix_articles),
+    non_white = confusion_matrix_articles[, "non-white"],
+    white = confusion_matrix_articles[, "white"],
+    Precision = precision_articles,
+    Recall = recall_articles,
+    F1_Score = f1_score_articles
+  ),
+  align = "c",
+  caption = "Evaluation Metrics for Ethnicity Prediction (Articles Dataset (Before SMOTE))"
+) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+# Print feature importance analysis for articles dataset
+kable(
+  importance_df_articles,
+  align = "c",
+  caption = "Feature Importance Analysis (Articles Dataset (Before SMOTE))"
+) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+```
+
+```{r}
+
+
+library(randomForest)
+library(caret)
+library(knitr)
+
+# Ensure the target variable is a factor
+new_df_articles$Ethnicity <- factor(new_df_articles$Ethnicity)
+
+# Convert the factor levels to valid R variable names
+levels(new_df_articles$Ethnicity) <- make.names(levels(new_df_articles$Ethnicity))
+
+# Specify the control parameters for cross-validation
+control <- trainControl(method = "cv",        # stratified k-fold cross-validation
+                        number = 10,          # number of folds (k)
+                        classProbs = TRUE,    # class probabilities should be computed
+                        summaryFunction = multiClassSummary, # Use a summary function suitable for multiclass classification
+                        savePredictions = "final") # Save predictions for later analysis
+
+# Set seed for reproducibility
+set.seed(123)
+
+# Train the model using cross-validation
+model_articles <- train(Ethnicity ~ .,         # The formula for our model (predict Ethnicity based on all other variables)
+                        data = new_df_articles,  # The dataset
+                        method = "rf",         # Random Forest algorithm
+                        trControl = control,   # The cross-validation control parameters specified earlier
+                        metric = "F1",        # The performance metric to optimize (F1 score)
+                        ntree = 100)           # number of trees
+
+# Extract the F1 scores for articles
+f1_scores_articles <- model_articles$resample$F1
+
+# Calculate the average F1 score for articles before SMOTE (rounded to 2 decimal places)
+average_f1_articles_bs <- round(mean(f1_scores_articles, na.rm = TRUE), 2)
+
+# Output the results for articles after SMOTE
+cat("Average F1 Score (Articles Dataset - After SMOTE):", average_f1_articles_bs, "\n")
+
+
+
+```
+
+# ARTCILES AFTER SMOTE
+
+```{r}
+
+library(smotefamily)
+
+# Split the data into training and testing sets for articles
+set.seed(123)
+predictors_articles <- c("ArticleLength", "sentiment_vader", "total_count")
+new_df_articles <- combined_df[c("Ethnicity", predictors_articles )]
+
+trainIndex <- createDataPartition(new_df_articles$Ethnicity, p = .8, list = FALSE, times = 1)
+train_set <- new_df_articles[trainIndex, ]
+test_set  <- new_df_articles[-trainIndex, ]
+
+train_set$Ethnicity <- as.factor(train_set$Ethnicity)
+test_set$Ethnicity <- as.factor(test_set$Ethnicity)
+
+# Separate predictors and target for SMOTE
+X_train <- train_set[, predictors_articles]
+y_train <- train_set$Ethnicity
+
+# Use SMOTE to oversample the minority class
+smote_results <- SMOTE(X = X_train, target = y_train, K = 5, dup_size = 2)
+
+# Combine the results back into a data frame
+smote_data <- data.frame(smote_results$data)
+colnames(smote_data) <- c(predictors_articles, "Ethnicity")
+
+# Convert the Ethnicity in smote_data back to a factor
+smote_data$Ethnicity <- as.factor(smote_data$Ethnicity)
+
+# Now run the model
+set.seed(123)
+model_articles <- randomForest(Ethnicity ~ ., data = smote_data, ntree = 100)
+
+# Predict using the model for the articles dataset
+predictions_articles <- predict(model_articles, newdata = test_set)
+
+# Create a data frame to store the results and calculate evaluation metrics
+results_articles <- data.frame(
+  Predicted_Ethnicity = predictions_articles,
+  Actual_Ethnicity = test_set$Ethnicity
+)
+
+confusion_matrix_articles <- table(results_articles$Predicted_Ethnicity, results_articles$Actual_Ethnicity)
+accuracy_articles <- round(sum(diag(confusion_matrix_articles)) / sum(confusion_matrix_articles), 2)
+precision_articles <- round(diag(confusion_matrix_articles) / colSums(confusion_matrix_articles), 2)
+recall_articles <- round(diag(confusion_matrix_articles) / rowSums(confusion_matrix_articles), 2)
+f1_score_articles <- round(2 * (precision_articles * recall_articles) / (precision_articles + recall_articles), 2)
+
+# Perform feature importance analysis for articles
+importance_articles <- importance(model_articles)
+importance_df_articles <- data.frame(Attribute = rownames(importance_articles),
+                                     MeanDecreaseGini = importance_articles[, "MeanDecreaseGini"])
+
+# Print evaluation metrics for tweets dataset
+kable(
+  data.frame(
+    Ethnicity = rownames(confusion_matrix_tweets),
+    non_white = confusion_matrix_tweets[, "non-white"],
+    white = confusion_matrix_tweets[, "white"],
+    Precision = precision_tweets,
+    Recall = recall_tweets,
+    F1_Score = f1_score_tweets
+  ),
+  align = "c",
+  caption = "Evaluation Metrics for Ethnicity Prediction (Tweets Dataset)"
+) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+# Print feature importance analysis for tweets dataset
+kable(
+  importance_df_tweets,
+  align = "c",
+  caption = "Feature Importance Analysis (Tweets Dataset)"
+) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+# Print evaluation metrics for articles dataset
+kable(
+  data.frame(
+    Ethnicity = rownames(confusion_matrix_articles),
+    non_white = confusion_matrix_articles[, "non-white"],
+    white = confusion_matrix_articles[, "white"],
+    Precision = precision_articles,
+    Recall = recall_articles,
+    F1_Score = f1_score_articles
+  ),
+  align = "c",
+  caption = "Evaluation Metrics for Ethnicity Prediction (Articles Dataset (After SMOTE))"
+) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+# Print feature importance analysis for articles dataset
+kable(
+  importance_df_articles,
+  align = "c",
+  caption = "Feature Importance Analysis (Articles Dataset (After SMOTE))"
+) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+
+
+```
+
+
+
+```{r}
+
+library(randomForest)
+library(caret)
+library(knitr)
+
+# Split the data into training and testing sets for articles
+set.seed(123)
+predictors_articles <- c("ArticleLength", "sentiment_vader", "total_count")
+new_df_articles <- combined_df[c("Ethnicity", predictors_articles)]
+
+trainIndex <- createDataPartition(new_df_articles$Ethnicity, p = .8, list = FALSE, times = 1)
+train_set <- new_df_articles[trainIndex, ]
+test_set  <- new_df_articles[-trainIndex, ]
+
+train_set$Ethnicity <- as.factor(train_set$Ethnicity)
+test_set$Ethnicity <- as.factor(test_set$Ethnicity)
+
+# Renaming the levels to valid R variable names
+levels(train_set$Ethnicity) <- make.names(levels(train_set$Ethnicity))
+levels(test_set$Ethnicity) <- make.names(levels(test_set$Ethnicity))
+
+# Separate predictors and target for SMOTE
+X_train <- train_set[, predictors_articles]
+y_train <- train_set$Ethnicity
+
+# Use SMOTE to oversample the minority class
+smote_results <- SMOTE(X = X_train, target = y_train, K = 5, dup_size = 2)
+
+# Combine the results back into a data frame
+smote_data <- data.frame(smote_results$data)
+colnames(smote_data) <- c(predictors_articles, "Ethnicity")
+
+# Convert the Ethnicity in smote_data back to a factor
+smote_data$Ethnicity <- as.factor(smote_data$Ethnicity)
+
+# Now run the model
+set.seed(123)
+model_articles <- randomForest(Ethnicity ~ ., data = smote_data, ntree = 100)
+
+# Perform stratified k-fold cross-validation
+control <- trainControl(method = "cv",        # stratified k-fold cross-validation
+                        number = 10,          # number of folds (k)
+                        classProbs = TRUE,   # class probabilities should be computed
+                        summaryFunction = multiClassSummary, # Use a summary function suitable for multiclass classification
+                        savePredictions = "final") # Save predictions for later analysis
+
+# Set seed for reproducibility
+set.seed(123)
+
+# Train the model using cross-validation
+model_articles_cv <- train(Ethnicity ~ .,         # The formula for our model (predict Ethnicity based on all other variables)
+                           data = smote_data,    # The dataset after applying SMOTE
+                           method = "rf",         # Random Forest algorithm
+                           trControl = control,   # The cross-validation control parameters specified earlier
+                           metric = "F1",         # The performance metric to optimize (F1 score)
+                           ntree = 100)           # Number of trees
+
+# Extract the F1 scores for articles after SMOTE
+f1_scores_articles <- model_articles_cv$results$F1
+
+# Calculate the average F1 score for articles after SMOTE
+average_f1_articles <- mean(f1_scores_articles, na.rm = TRUE)
+
+# Calculate the average F1 score for articles after SMOTE (rounded to 2 decimal places)
+average_f1_articles <- round(mean(f1_scores_articles, na.rm = TRUE), 2)
+
+# Output the results for articles after SMOTE
+cat("Average F1 Score (Articles Dataset - After SMOTE):", average_f1_articles, "\n")
+
+
+
+
+
+```
+
+
+# COMBINED OF BOTH TWEETS AND NEWS ARTICLES
+
+```{r}
+
+
+library(randomForest)
+library(caret)
+
+# Replace string column (Ethnicity) with numeric
+new_df$Ethnicity <- as.numeric(factor(new_df$Ethnicity))
+
+# Preprocess the data
+features <- c("Averagearticlelength", "AverageCount", "Averagesentiment", "text_length", 
+              "total_engagement", "target_word_count", "sentiment_vader")
+
+new_df <- new_df[c("Ethnicity", features)]
+
+set.seed(123) # for reproducibility
+trainIndex <- createDataPartition(new_df$Ethnicity, p = .8, list = FALSE, times = 1)
+train_set <- new_df[trainIndex, ]
+test_set  <- new_df[-trainIndex, ]
+
+# Convert Ethnicity back to factor
+train_set$Ethnicity <- as.factor(train_set$Ethnicity)
+test_set$Ethnicity <- as.factor(test_set$Ethnicity)
+
+# Train the model
+set.seed(123)
+model <- randomForest(Ethnicity ~ ., data = train_set, ntree = 100)
+
+# Print model summary
+print(model)
+
+# Make predictions
+predictions <- predict(model, test_set)
+
+# Generate confusion matrix
+cm <- confusionMatrix(predictions, test_set$Ethnicity, mode = "prec_recall")
+
+# Calculate evaluation metrics
+accuracy <- round(cm$overall["Accuracy"], 4)
+precision <- round(cm$byClass["Precision"], 4)
+recall <- round(cm$byClass["Recall"], 4)
+f1_score_combined <- round(cm$byClass["F1"], 4)
+
+# Create a table using kable()
+table_df <- data.frame(
+  Ethnicity = levels(test_set$Ethnicity),
+  Class1 = cm$table[, levels(test_set$Ethnicity)[1]],
+  Class2 = cm$table[, levels(test_set$Ethnicity)[2]],
+  Precision = precision,
+  Recall = recall,
+  F1_Score = f1_score_combined
+)
+
+# Format the table
+kable(table_df, align = "c", caption = "Evaluation Metrics for Ethnicity Prediction (Combined Dataset)") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+# Feature Importance Analysis
+importance <- importance(model)
+
+# Create a data frame for feature importance
+importance_df <- data.frame(Attribute = rownames(importance),
+                            MeanDecreaseGini = importance[, "MeanDecreaseGini"])
+
+# Print the table using kable
+kable(importance_df, align = "c", caption = "Feature Importance Analysis (Tweets Dataset)") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+
+```
